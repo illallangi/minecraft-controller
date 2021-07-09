@@ -1,0 +1,36 @@
+data:
+    CaddyFile: |-
+        {
+            admin off
+            http_port 65080
+            https_port 65443
+            debug
+        }
+        :65443 {
+            tls /etc/caddy/tls.crt /etc/caddy/tls.key
+            route /.well-known/teapot {
+                teapot
+            }
+            route /.well-known/health {
+                respond 200
+            }
+            
+{%- for o in minecraft_idx[namespace] %}
+            route {{ ["/", o["spec"]["uriPath"], "map/"] | path_join }}* {
+                uri strip_prefix {{ ["/", o["spec"]["uriPath"], "map"] | path_join }}
+                reverse_proxy http://{{ o['status']['application.service']['name'] }}.{{ namespace }}.svc.cluster.local:8123
+                    
+            }
+            route {{ ["/", o["spec"]["uriPath"], "rcon/"] | path_join }}* {
+                teapot
+            }
+{%- endfor %}
+            route /* {
+                file_server browse {
+                    root /var/www/html
+                }
+            }
+        }
+        :5800 {
+            respond /.well-known/health 200
+        }

@@ -1,0 +1,119 @@
+metadata:
+  annotations:
+    configmap.reloader.stakater.com/reload: {{ application_configmap['metadata']['name'] }}
+    secret.reloader.stakater.com/reload: {{ tls_certificate['spec']['secretName'] }}
+spec:
+  selector:
+    matchLabels: {{ selector }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels: {{ selector }}
+    spec:
+      containers:
+      - image: docker.io/illallangi/caddy:latest
+        imagePullPolicy: IfNotPresent
+        name: caddy
+        ports:
+        - containerPort: 65080
+          name: web
+        - containerPort: 65443
+          name: web-secure
+        volumeMounts:
+        - mountPath: /etc/caddy/Caddyfile
+          name: config
+          subPath: CaddyFile
+          readOnly: True
+        - mountPath: /etc/caddy/tls.crt
+          name: tls
+          subPath: tls.crt
+          readOnly: True
+        - mountPath: /etc/caddy/tls.key
+          name: tls
+          subPath: tls.key
+          readOnly: True
+        - mountPath: /var/www/html/map
+          name: scratch
+          readOnly: True
+        - mountPath: /var/www/html/rcon
+          name: scratch
+          readOnly: True
+        - mountPath: /var/www/html/backup
+          name: data
+          subPath: {{ [spec["data"]["subPath"], "backup"] | path_join }}
+          readOnly: True
+      - env:   
+        - name: RCON_PASSWORD
+          value: "!wfbrhioewbXviohrfeqba2"
+        envFrom:
+        - configMapRef:
+            name: {{ application_configmap['metadata']['name'] }}
+        image: docker.io/itzg/minecraft-server:latest
+        imagePullPolicy: IfNotPresent
+        name: minecraft-server
+        ports:
+        - containerPort: 25565
+          name: minecraft
+        volumeMounts:
+        - mountPath: /data
+          name: persistence
+          subPath: data
+        - mountPath: /plugins
+          name: scratch
+          subPath: plugins
+        - mountPath: /backup
+          name: data
+          subPath: {{ [spec["data"]["subPath"], "backup"] | path_join }}
+          readOnly: True
+      - env: 
+        - name: BACKUP_INTERVAL
+          value: 1h
+        - name: LINK_LATEST
+          value: "true"
+        - name: RCON_PASSWORD
+          value: "!wfbrhioewbXviohrfeqba2"
+        - name: BACKUP_NAME
+          value: minecraft-{{ name }}
+        image: docker.io/itzg/mc-backup:latest
+        imagePullPolicy: IfNotPresent
+        name: mc-backup
+        volumeMounts:
+        - mountPath: /data
+          name: persistence
+          readOnly: True
+          subPath: data
+        - mountPath: /backups
+          name: data
+          subPath: {{ [spec['data']['subPath'], 'backup'] | path_join }}
+      initContainers:
+{% for plugin in spec['plugins'] %}
+      - command:
+        - /bin/bash
+        - -c
+        - /usr/bin/wget --directory-prefix /plugins {{ plugin['url']}}
+        image: docker.io/illallangi/toolbx:latest
+        imagePullPolicy: IfNotPresent
+        name: plugin-{{ loop.index }}
+        volumeMounts:
+        - mountPath: /plugins
+          name: scratch
+          subPath: plugins
+{% endfor %}
+      serviceAccount: {{ application_serviceaccount['metadata']['name'] }}
+      serviceAccountName: {{ application_serviceaccount['metadata']['name'] }}
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ spec['data']['claimName'] }}
+      - name: persistence
+        persistentVolumeClaim:
+          claimName: {{ application_persistentvolumeclaim['metadata']['name'] }}
+      - name: config
+        configMap:
+          name: {{ application_configmap['metadata']['name'] }}
+      - name: tls
+        secret:
+          secretName: {{ tls_certificate['spec']['secretName'] }}
+      - name: scratch
+        emptyDir: {}

@@ -1,0 +1,6 @@
+apiVersion: controllers.illallangi.enterprises/v1
+kind: DNSResourceRecord
+spec:
+- name: {{ spec['hostName'] }}.{{ spec['domainName'] }}
+  selector: {{ selector }}
+  type: Selector

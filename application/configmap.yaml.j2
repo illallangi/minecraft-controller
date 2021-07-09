@@ -1,0 +1,52 @@
+data:
+    SERVER_NAME: My Server
+    MOTD: My Server Message
+    VERSION: LATEST
+    DIFFICULTY: "normal"  # peaceful, easy, normal, and hard
+    WHITELIST: {{ ','.join(['illallangi']) }}
+    OPS: {{ ','.join(['illallangi']) }}
+    TZ: Australia/Melbourne
+    UID: "{{ spec[uid] }}"
+    GID: "{{ spec[gid] }}"
+    EULA: "true"
+    USE_AIKAR_FLAGS: "true"
+    USE_LARGE_PAGES: "true"
+    ENABLE_RCON: "true"
+    OVERRIDE_SERVER_PROPERTIES: "true"
+    OVERRIDE_WHITELIST: "true"
+    OVERRIDE_OPS: "true"
+    REMOVE_OLD_MODS: "true"
+    FORCE_REDOWNLOAD: "true"
+    TYPE: PAPER
+    WORLD: /backup/latest.tgz
+    CaddyFile: |-
+        {
+            admin off
+            http_port 65080
+            https_port 65443
+            debug
+        }
+        :65443 {
+            tls /etc/caddy/tls.crt /etc/caddy/tls.key
+            route /.well-known/teapot {
+                teapot
+            }
+            route /.well-known/health {
+                respond 200
+            }
+            route /map/* {
+                uri strip_prefix /map
+                reverse_proxy http://localhost:8123
+            }
+            route /rcon/* {
+                teapot
+            }
+            route /* {
+                file_server browse {
+                    root /var/www/html
+                }
+            }
+        }
+        :5800 {
+            respond /.well-known/health 200
+        }
